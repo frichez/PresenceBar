@@ -4,30 +4,33 @@ import Foundation
 /// presence; what to do with it is up to the apps that read it
 /// (user's choice, 2026-11-27: PresenceBar stays agnostic).
 ///
-/// Rule: a person is home when their phone (~/.config/netatmo/phones.json)
+/// Rule: a person is home when their phone (~/.config/tplink/phones.json)
 /// is on the TP-Link Archer at this check, away when it is not. No grace
 /// period (user's choice, 2026-11-27: immediate status; a 30 min grace was
 /// used before). The house is home while anyone is. When the router can't be
 /// read, every decision is kept.
 ///
-/// Files in ~/Projects/netatmo:
+/// Files in ~/Projects/PresenceBar/data (private: gitignored, user's choice
+/// 2026-11-27; the phones list and router login stay in ~/.config):
 ///   presence-state.json   current state, also served by PresenceServer
 ///   presence-events.csv   one row per change: a person or the house leaving / coming home
 ///   presence-log.csv      one row per check, for later analysis
+///   presence-phones-seen.json  last time each device was on the Wi-Fi
 ///
 /// History: the Netatmo noise detector was removed on 2026-11-26 (log kept in
 /// presence-log-noise-2026-11-26.csv), the Nest Auto-Away column on
 /// 2026-11-27 (Absence auto is off on purpose, so it always said home).
 struct Detector {
     static let home = FileManager.default.homeDirectoryForCurrentUser
-    static let dir = home.appendingPathComponent("Projects/netatmo")
+    static let repo = home.appendingPathComponent("Projects/PresenceBar")
+    static let dir = repo.appendingPathComponent("data")
     static let logURL = dir.appendingPathComponent("presence-log.csv")
     static let eventsURL = dir.appendingPathComponent("presence-events.csv")
     static let stateURL = dir.appendingPathComponent("presence-state.json")
-    static let phonesURL = home.appendingPathComponent(".config/netatmo/phones.json")
+    static let phonesURL = home.appendingPathComponent(".config/tplink/phones.json")
     static let seenURL = dir.appendingPathComponent("presence-phones-seen.json")
-    static let helper = dir.appendingPathComponent("archer_presence.py")
-    static let helperPython = dir.appendingPathComponent(".venv-tplink/bin/python")
+    static let helper = repo.appendingPathComponent("archer_presence.py")
+    static let helperPython = repo.appendingPathComponent(".venv-tplink/bin/python")
 
     // MARK: State (presence-state.json)
 
@@ -123,7 +126,7 @@ struct Detector {
         return Outcome(state: s.state, changed: changed, summary: "\(s.state) | \(who)")
     }
 
-    // MARK: Phones on the TP-Link Archer (read-only, via ../archer_presence.py)
+    // MARK: Phones on the TP-Link Archer (read-only, via archer_presence.py)
 
     struct Check {
         var ok = false
@@ -131,7 +134,7 @@ struct Detector {
         var new: [String] = []    // name@mac of phone-like devices not in phones.json
     }
 
-    /// Runs the Python helper (the TP-Link sign-in needs its crypto library).
+    /// Runs archer_presence.py (the TP-Link sign-in needs its crypto library).
     static func routerDevices() async -> [[String: Any]]? {
         await withCheckedContinuation { cont in
             DispatchQueue.global().async {

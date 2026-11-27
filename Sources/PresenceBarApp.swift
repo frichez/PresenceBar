@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Menu bar app that runs the log-only presence detector (Detector.swift)
-/// every 10 minutes while it is open, shows who is home and the latest
+/// every 5 minutes while it is open, shows who is home and the latest
 /// changes, and serves the state to other apps (PresenceServer.swift). It
 /// only reports presence and controls nothing.
 #if !SNAPSHOT
@@ -23,7 +23,7 @@ struct PresenceBarApp: App {
 
 @MainActor
 final class PresenceModel: ObservableObject {
-    static let interval: TimeInterval = 10 * 60
+    static let interval: TimeInterval = 5 * 60   // user's choice, 2026-11-27 (was 10 min)
     private static let pausedKey = "paused"
 
     @Published var state = Detector.loadState()
@@ -167,7 +167,7 @@ struct PresencePanel: View {
                 Label("Not yet known: " + model.newDevices.replacingOccurrences(of: " ", with: ", "),
                       systemImage: "questionmark.circle")
                     .font(.caption).foregroundStyle(.secondary)
-                    .help("Phone-like devices on the Wi-Fi that are not in ~/.config/netatmo/phones.json")
+                    .help("Phone-like devices on the Wi-Fi that are not in ~/.config/tplink/phones.json")
             }
         }
     }
@@ -206,7 +206,7 @@ struct PresencePanel: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Circle().fill(model.paused ? Color.gray : Color.green).frame(width: 8, height: 8)
-                Text(model.paused ? "Paused" : "Checking every 10 minutes while PresenceBar is open")
+                Text(model.paused ? "Paused" : "Checking every 5 minutes while PresenceBar is open")
                     .font(.caption)
                 Spacer()
                 if model.busy { ProgressView().controlSize(.small) }

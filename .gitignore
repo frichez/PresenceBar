@@ -1,3 +1,14 @@
 build/
 *.bak-*
 .DS_Store
+
+# Private data: never committed. History is in data/, the phones list and
+# router login in ~/.config.
+data/
+phones.json*
+archer.json
+credentials.json
+presence-*.csv
+presence-*.json
+presence-*.log
+.venv*/
