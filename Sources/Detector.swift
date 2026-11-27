@@ -29,8 +29,6 @@ struct Detector {
     static let stateURL = dir.appendingPathComponent("presence-state.json")
     static let phonesURL = home.appendingPathComponent(".config/tplink/phones.json")
     static let seenURL = dir.appendingPathComponent("presence-phones-seen.json")
-    static let helper = repo.appendingPathComponent("archer_presence.py")
-    static let helperPython = repo.appendingPathComponent(".venv-tplink/bin/python")
 
     // MARK: State (presence-state.json)
 
@@ -48,11 +46,12 @@ struct Detector {
         var since: Int
         var checkedAt: Int?     // last check, successful or not
         var routerOK: Bool?
+        var routerError: String?   // why the last check couldn't read the router
         var people: [Person]?   // in phones.json order
         var home: [String]?     // who is home, for convenience
 
         enum CodingKeys: String, CodingKey {
-            case state, since, checkedAt = "checked_at", routerOK = "router_ok", people, home
+            case state, since, checkedAt = "checked_at", routerOK = "router_ok", routerError = "router_error", people, home
         }
     }
 
@@ -113,6 +112,7 @@ struct Detector {
         }
         s.checkedAt = nowInt
         s.routerOK = check.ok
+        s.routerError = check.error
         let changed = s.state != wasHouse
         if changed { events.append(["house", s.state, "-"]) }
         try saveState(s)
@@ -126,38 +126,22 @@ struct Detector {
         return Outcome(state: s.state, changed: changed, summary: "\(s.state) | \(who)")
     }
 
-    // MARK: Phones on the TP-Link Archer (read-only, via archer_presence.py)
+    // MARK: Phones on the TP-Link Archer (read-only, via RouterClient)
 
     struct Check {
         var ok = false
         var people: [(who: String, lastSeen: Double?)] = []   // phones.json order
         var new: [String] = []    // name@mac of phone-like devices not in phones.json
-    }
-
-    /// Runs archer_presence.py (the TP-Link sign-in needs its crypto library).
-    static func routerDevices() async -> [[String: Any]]? {
-        await withCheckedContinuation { cont in
-            DispatchQueue.global().async {
-                let p = Process()
-                p.executableURL = helperPython
-                p.arguments = ["-I", helper.path]
-                let pipe = Pipe()
-                p.standardOutput = pipe
-                p.standardError = FileHandle.nullDevice
-                do { try p.run() } catch { cont.resume(returning: nil); return }
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                p.waitUntilExit()
-                guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      o["ok"] as? Bool == true else { cont.resume(returning: nil); return }
-                cont.resume(returning: o["devices"] as? [[String: Any]])
-            }
-        }
+        var error: String?
     }
 
     static func phoneCheck(now: Double) async -> Check {
         guard let data = try? Data(contentsOf: phonesURL),
-              let cfg = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let devices = await routerDevices() else { return Check() }
+              let cfg = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return Check(error: "can't read \(phonesURL.path)")
+        }
+        let devices: [RouterClient.Device]
+        do { devices = try await RouterClient.connectedDevices() } catch { return Check(error: "\(error)") }
         let known = (cfg["phones"] as? [[String: Any]] ?? []).compactMap { p -> (mac: String, who: String)? in
             guard let mac = (p["mac"] as? String)?.lowercased(), let who = p["who"] as? String else { return nil }
             return (mac, who)
@@ -166,10 +150,10 @@ struct Detector {
         var seen = (try? JSONSerialization.jsonObject(with: Data(contentsOf: seenURL))) as? [String: Double] ?? [:]
         var result = Check(ok: true)
         for d in devices {
-            guard let mac = (d["mac"] as? String)?.lowercased() else { continue }
+            let mac = d.mac
             seen[mac] = now
-            let name = d["name"] as? String ?? ""
-            let phoneLike = (d["private"] as? Bool ?? false) || name.lowercased().contains("phone")
+            let name = d.name
+            let phoneLike = d.isPrivate || name.lowercased().contains("phone")
             if phoneLike && !ignore.contains(mac) && !known.contains(where: { $0.mac == mac }) {
                 result.new.append("\(name.isEmpty ? "unnamed" : name)@\(mac)")
             }

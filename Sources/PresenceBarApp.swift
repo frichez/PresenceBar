@@ -212,7 +212,7 @@ struct PresencePanel: View {
                 if model.busy { ProgressView().controlSize(.small) }
             }
             if let checked = model.state.checkedAt {
-                Text("Last check \(shortTime(checked))" + (model.state.routerOK == false ? " - router not readable, keeping the last state" : ""))
+                Text("Last check \(shortTime(checked))" + (model.state.routerOK == false ? " - router not readable, keeping the last state" + (model.state.routerError.map { " (\($0))" } ?? "") : ""))
                     .font(.caption).foregroundStyle(model.state.routerOK == false ? .orange : .secondary)
             }
             if let err = model.lastError {

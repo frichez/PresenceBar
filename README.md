@@ -45,7 +45,8 @@ curl "http://127.0.0.1:8787/events?limit=5"
 }
 ```
 
-Times are Unix timestamps in seconds. The data is only as fresh as the last
+When the router can't be read, `router_ok` is `false` and `router_error`
+says why. Times are Unix timestamps in seconds. The data is only as fresh as the last
 check: compare `checked_at` with the current time, since the Mac may have
 slept or PresenceBar may be paused.
 
@@ -68,18 +69,12 @@ gitignored, so it never leaves the Mac:
 ## Requirements
 
 - macOS 14 or later, Swift command-line tools (no Xcode project needed).
-- [`archer_presence.py`](archer_presence.py): a small read-only helper that
-  signs in to the router with [tplinkrouterc6u](https://github.com/AlexandrErohin/TP-Link-Archer-C6U),
-  prints the connected devices as JSON and signs out. It changes no router
-  setting. The router allows a single admin session, so each check may sign
-  you out of the router's web page. It runs from the gitignored virtual
-  environment `.venv-tplink`:
-
-```bash
-python3 -m venv .venv-tplink
-.venv-tplink/bin/python -m pip install tplinkrouterc6u
-```
-
+- A TP-Link router that uses the "SG" sign-in (SHA-256, RSA-OAEP and
+  HMAC-SHA256, e.g. Archer BE550 or BE3600). [`RouterClient.swift`](Sources/RouterClient.swift)
+  is a Swift port of that part of [tplinkrouterc6u](https://github.com/AlexandrErohin/TP-Link-Archer-C6U):
+  it signs in, reads the connected devices and signs out. It changes no
+  router setting, and needs no Python or other packages. The router allows a
+  single admin session, so a check may sign you out of the router's web page.
 - `~/.config/tplink/archer.json`, the router login (keep it `chmod 600`):
 
 ```json
@@ -103,13 +98,22 @@ python3 -m venv .venv-tplink
 On each iPhone, set **Private Wi-Fi Address** to **Fixed** for the home
 network, so its address doesn't change.
 
+On first launch macOS asks to let PresenceBar access the **local network**:
+allow it. Without it every check fails with "The Internet connection appears
+to be offline" (System Settings > Privacy & Security > Local Network).
+
 ## Build
 
-The paths above assume the repo is cloned to `~/Projects/PresenceBar`
+The history folder assumes the repo is cloned to `~/Projects/PresenceBar`
 (see `Detector.repo`).
-
 
 ```bash
 ./build.sh         # builds build/PresenceBar.app
 ./build.sh --run   # builds and (re)launches it
 ```
+
+## License
+
+GPL-3.0-or-later (see [LICENSE](LICENSE)). `Sources/RouterClient.swift` is a
+port of part of [tplinkrouterc6u](https://github.com/AlexandrErohin/TP-Link-Archer-C6U),
+which is licensed under GPL-3.0-or-later.
