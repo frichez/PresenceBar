@@ -53,10 +53,19 @@ final class PresenceModel: ObservableObject {
         tick()
     }
 
+    /// Every phone in phones.json is on the Wi-Fi.
+    var everyoneHome: Bool {
+        let people = state.people ?? []
+        return !people.isEmpty && people.allSatisfy(\.home)
+    }
+
+    static let familyIcon = "figure.2.and.child.holdinghands"
+
     var menuIcon: String {
         if paused { return "pause.circle" }
         if lastError != nil { return "exclamationmark.triangle" }
-        return state.state == "away" ? "figure.walk.departure" : "house"
+        if state.state == "away" { return "figure.walk.departure" }
+        return everyoneHome ? Self.familyIcon : "house"
     }
 
     private func tick() {
@@ -129,13 +138,14 @@ struct PresencePanel: View {
 
     private var header: some View {
         let away = model.state.state == "away"
+        let all = !away && model.everyoneHome
         return HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("House").font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: 6) {
-                    Image(systemName: away ? "figure.walk.departure" : "house.fill")
-                        .foregroundStyle(away ? .orange : .blue)
-                    Text(away ? "Nobody home" : "Someone home").font(.title3.weight(.medium))
+                    Image(systemName: away ? "figure.walk.departure" : all ? PresenceModel.familyIcon : "house.fill")
+                        .foregroundStyle(away ? .orange : all ? .green : .blue)
+                    Text(away ? "Nobody home" : all ? "Everyone home" : "Someone home").font(.title3.weight(.medium))
                 }
                 Text("since \(shortTime(model.state.since))").font(.caption).foregroundStyle(.secondary)
             }
@@ -172,27 +182,67 @@ struct PresencePanel: View {
         }
     }
 
+    /// Who the Changes list shows: nil for everyone, "house" or a person.
+    @State private var filter: String?
+
     private var changes: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Changes").font(.caption).foregroundStyle(.secondary)
-            ForEach(model.events.suffix(12).reversed()) { e in
-                HStack(spacing: 8) {
-                    Text(shortTime(e.time)).monospacedDigit().foregroundStyle(.secondary)
-                        .frame(width: 66, alignment: .leading)
-                    Image(systemName: e.who == "house" ? (e.event == "away" ? "house" : "house.fill")
-                                                       : (e.event == "away" ? "figure.walk.departure" : "figure.walk.arrival"))
-                        .foregroundStyle(e.event == "away" ? .orange : .blue)
-                        .frame(width: 16)
-                    Text(text(for: e))
-                        .fontWeight(e.who == "house" ? .medium : .regular)
-                        .lineLimit(1).truncationMode(.tail)
-                }
-                .font(.caption)
+        let names = (model.state.people ?? []).map(\.who)
+        let shown = model.events.reversed().filter { filter == nil || $0.who == filter }
+        let days = Dictionary(grouping: shown, by: { String($0.time.prefix(10)) })
+        return VStack(alignment: .leading, spacing: 6) {
+            Picker("Show", selection: $filter) {
+                Text("All").tag(String?.none)
+                Text("House").tag(String?.some("house"))
+                ForEach(names, id: \.self) { Text($0).tag(String?.some($0)) }
             }
-            if model.events.isEmpty {
+            .pickerStyle(.segmented).labelsHidden().controlSize(.small)
+            if shown.isEmpty {
                 Text("No changes yet.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(days.keys.sorted(by: >), id: \.self) { day in
+                            Section {
+                                ForEach(days[day] ?? []) { e in changeRow(e) }
+                            } header: {
+                                Text(dayTitle(day)).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                                    .padding(.top, day == days.keys.max() ? 0 : 4)
+                            }
+                        }
+                    }
+                    .padding(.trailing, 12)   // room for the scroll bar
+                }
+                .frame(height: min(220, CGFloat(shown.count + days.count) * 19))
+                .scrollIndicators(.automatic)
             }
         }
+    }
+
+    private func changeRow(_ e: Detector.Event) -> some View {
+        HStack(spacing: 8) {
+            Text(String(e.time.suffix(5))).monospacedDigit().foregroundStyle(.secondary)
+                .frame(width: 38, alignment: .leading)
+            Image(systemName: e.who == "house" ? (e.event == "away" ? "house" : "house.fill")
+                                               : (e.event == "away" ? "figure.walk.departure" : "figure.walk.arrival"))
+                .foregroundStyle(e.event == "away" ? .orange : .blue)
+                .frame(width: 16)
+            Text(text(for: e))
+                .fontWeight(e.who == "house" ? .medium : .regular)
+                .lineLimit(1).truncationMode(.tail)
+        }
+        .font(.caption)
+    }
+
+    /// "2026-11-27" → "Today", "Yesterday", "Wed 26 Nov" or "Wed 26 Nov 2025"
+    private func dayTitle(_ day: String) -> String {
+        let p = DateFormatter(); p.dateFormat = "yyyy-MM-dd"
+        guard let d = p.date(from: day) else { return day }
+        let cal = Calendar.current
+        if cal.isDateInToday(d) { return "Today" }
+        if cal.isDateInYesterday(d) { return "Yesterday" }
+        let f = DateFormatter()
+        f.dateFormat = cal.isDate(d, equalTo: Date(), toGranularity: .year) ? "EEE d MMM" : "EEE d MMM yyyy"
+        return f.string(from: d)
     }
 
     private func text(for e: Detector.Event) -> String {

@@ -66,6 +66,10 @@ gitignored, so it never leaves the Mac:
 | `presence-log.csv` | one row per check |
 | `presence-phones-seen.json` | last time each device was seen |
 
+Nothing in `data/` is ever trimmed or rotated, so the history is kept forever.
+At one check every 5 minutes, `presence-log.csv` grows by about 4 MB a year.
+Because the folder is gitignored, back it up yourself (Time Machine covers it).
+
 ## Requirements
 
 - macOS 14 or later, Swift command-line tools (no Xcode project needed).

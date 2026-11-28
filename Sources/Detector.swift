@@ -140,8 +140,15 @@ struct Detector {
               let cfg = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return Check(error: "can't read \(phonesURL.path)")
         }
-        let devices: [RouterClient.Device]
-        do { devices = try await RouterClient.connectedDevices() } catch { return Check(error: "\(error)") }
+        // A network error is retried twice, 5 s apart: right after a rebuild or a
+        // wake from sleep, macOS can block Local Network access for a moment
+        // ("The Internet connection appears to be offline").
+        var devices: [RouterClient.Device] = []
+        for attempt in 1...3 {
+            do { devices = try await RouterClient.connectedDevices(); break }
+            catch RouterClient.Failure.request(_) where attempt < 3 { try? await Task.sleep(for: .seconds(5)) }
+            catch { return Check(error: "\(error)") }
+        }
         let known = (cfg["phones"] as? [[String: Any]] ?? []).compactMap { p -> (mac: String, who: String)? in
             guard let mac = (p["mac"] as? String)?.lowercased(), let who = p["who"] as? String else { return nil }
             return (mac, who)
