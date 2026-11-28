@@ -9,15 +9,47 @@ import SwiftUI
 @main
 #endif
 struct PresenceBarApp: App {
+    @NSApplicationDelegateAdaptor(ReopenDelegate.self) private var delegate
     @StateObject private var model = PresenceModel()
 
     var body: some Scene {
         MenuBarExtra {
             PresencePanel(model: model)
         } label: {
-            Image(systemName: model.menuIcon)
+            MenuIcon(model: model)
         }
         .menuBarExtraStyle(.window)
+
+        // The same panel in a normal window, for when the menu bar icon is hidden (behind the notch on the
+        // laptop screen): opening PresenceBar again from Finder or Spotlight while it runs shows this window.
+        Window("PresenceBar", id: "panel") {
+            PresencePanel(model: model)
+        }
+        .windowResizability(.contentSize)
+    }
+}
+
+extension Notification.Name { static let showPresencePanel = Notification.Name("PresenceBar.showPanel") }
+
+/// Opening the app again while it runs (Finder, Spotlight, `open`) asks for the panel window.
+final class ReopenDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        NotificationCenter.default.post(name: .showPresencePanel, object: nil)
+        return false
+    }
+}
+
+/// The menu bar icon; it is always alive, so it is the view that opens the panel window on request.
+struct MenuIcon: View {
+    @ObservedObject var model: PresenceModel
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Image(systemName: model.menuIcon)
+            .onReceive(NotificationCenter.default.publisher(for: .showPresencePanel)) { _ in
+                openWindow(id: "panel")
+                NSApp.activate()
+            }
     }
 }
 
@@ -190,6 +222,7 @@ struct PresencePanel: View {
         let names = (model.state.people ?? []).map(\.who)
         let shown = model.events.reversed().filter { filter == nil || $0.who == filter }
         let days = Dictionary(grouping: shown, by: { String($0.time.prefix(10)) })
+        let awayTimes = Self.awayDurations(model.events)
         return VStack(alignment: .leading, spacing: 6) {
             Picker("Show", selection: $filter) {
                 Text("All").tag(String?.none)
@@ -204,7 +237,7 @@ struct PresencePanel: View {
                     LazyVStack(alignment: .leading, spacing: 4) {
                         ForEach(days.keys.sorted(by: >), id: \.self) { day in
                             Section {
-                                ForEach(days[day] ?? []) { e in changeRow(e) }
+                                ForEach(days[day] ?? []) { e in changeRow(e, away: awayTimes[e.id]) }
                             } header: {
                                 Text(dayTitle(day)).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                                     .padding(.top, day == days.keys.max() ? 0 : 4)
@@ -219,7 +252,33 @@ struct PresencePanel: View {
         }
     }
 
-    private func changeRow(_ e: Detector.Event) -> some View {
+    /// For each "came home" event (a person, or "Someone home" for the
+    /// house): how long since the matching "left" event, in seconds.
+    static func awayDurations(_ events: [Detector.Event]) -> [Int: TimeInterval] {
+        let p = DateFormatter(); p.dateFormat = "yyyy-MM-dd HH:mm"
+        var left: [String: Date] = [:]
+        var result: [Int: TimeInterval] = [:]
+        for e in events {   // oldest first
+            guard let t = p.date(from: e.time) else { continue }
+            if e.event == "away" {
+                left[e.who] = t
+            } else if let l = left.removeValue(forKey: e.who) {
+                result[e.id] = t.timeIntervalSince(l)
+            }
+        }
+        return result
+    }
+
+    /// 2700 → "45 min", 12000 → "3 h 20", 190000 → "2 d 5 h"
+    private func duration(_ d: TimeInterval) -> String {
+        let m = Int(d / 60)
+        if m < 60 { return "\(m) min" }
+        if m < 24 * 60 { return m % 60 == 0 ? "\(m / 60) h" : String(format: "%d h %02d", m / 60, m % 60) }
+        let h = m / 60
+        return h % 24 == 0 ? "\(h / 24) d" : "\(h / 24) d \(h % 24) h"
+    }
+
+    private func changeRow(_ e: Detector.Event, away: TimeInterval?) -> some View {
         HStack(spacing: 8) {
             Text(String(e.time.suffix(5))).monospacedDigit().foregroundStyle(.secondary)
                 .frame(width: 38, alignment: .leading)
@@ -230,6 +289,11 @@ struct PresencePanel: View {
             Text(text(for: e))
                 .fontWeight(e.who == "house" ? .medium : .regular)
                 .lineLimit(1).truncationMode(.tail)
+            if let away {
+                Text(e.who == "house" ? "empty for \(duration(away))" : "away for \(duration(away))")
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
         }
         .font(.caption)
     }

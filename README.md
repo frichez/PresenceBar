@@ -122,8 +122,11 @@ GPL-3.0-or-later (see [LICENSE](LICENSE)). `Sources/RouterClient.swift` is a
 port of part of [tplinkrouterc6u](https://github.com/AlexandrErohin/TP-Link-Archer-C6U),
 which is licensed under GPL-3.0-or-later.
 
+When the menu bar icon is hidden (behind the notch on the laptop screen), open PresenceBar again from Spotlight or Finder while it runs: its panel then opens in a normal window.
+
 ## Alexa (optional)
 
 When AlexaBridge (`~/Projects/AlexaBridge`) runs, "Alexa, qui est à la maison" is answered from the last check.
 It is read-only and never starts a check (`Sources/Voice.swift`, `Sources/AlexaLink.swift`).
+An optional `"spoken"` per phone in `phones.json` is the name Alexa says instead of `"who"`.
 Without AlexaBridge, nothing changes.

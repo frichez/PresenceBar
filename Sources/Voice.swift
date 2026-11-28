@@ -6,19 +6,30 @@ extension PresenceModel {
     func whoIsHome() -> String {
         let people = state.people ?? []
         guard !people.isEmpty else { return "PresenceBar n'a pas encore de résultat." }
-        let home = people.filter(\.home).map(\.who), away = people.filter { !$0.home }
+        let say = Self.spokenNames()
+        let name = { (who: String) in say[who] ?? who }
+        let home = people.filter(\.home).map { name($0.who) }, away = people.filter { !$0.home }
         var text: String
         if home.isEmpty { text = "Personne n'est à la maison." }
         else if away.isEmpty { text = "Tout le monde est à la maison : \(Self.list(home))." }
         else {
             text = "À la maison : \(Self.list(home)). Absent\(away.count > 1 ? "s" : "") : "
-                + Self.list(away.map { "\($0.who) depuis \(Self.spokenTime($0.since))" }) + "."
+                + Self.list(away.map { "\(name($0.who)) depuis \(Self.spokenTime($0.since))" }) + "."
         }
         if let checked = state.checkedAt, Date().timeIntervalSince1970 - Double(checked) > 15 * 60 {
             text += " Dernière vérification à \(Self.spokenTime(checked))."
         }
         if paused { text += " PresenceBar est en pause." }
         return text
+    }
+
+    /// Optional "spoken" per phone in phones.json: the name Alexa says instead of the short one ("who").
+    private static func spokenNames() -> [String: String] {
+        guard let data = try? Data(contentsOf: Detector.phonesURL),
+              let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+        return (j["phones"] as? [[String: Any]] ?? []).reduce(into: [:]) { out, p in
+            if let who = p["who"] as? String, let spoken = p["spoken"] as? String, !spoken.isEmpty { out[who] = spoken }
+        }
     }
 
     private static func list(_ items: [String]) -> String {
