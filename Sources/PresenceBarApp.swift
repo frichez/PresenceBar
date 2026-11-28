@@ -40,6 +40,7 @@ final class PresenceModel: ObservableObject {
 
     init(startServer: Bool = true) {
         if startServer { server.start() }
+        AlexaLink.onCommand { [weak self] _ in self?.whoIsHome() }  // via AlexaBridge, if it runs
         refresh()
         // A 60 s tick rather than a 600 s timer: after the Mac sleeps, the
         // next check then comes within a minute of waking.
