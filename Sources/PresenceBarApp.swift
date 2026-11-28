@@ -331,8 +331,6 @@ struct PresencePanel: View {
             if let err = model.lastError {
                 Text("Last check failed: \(err)").font(.caption).foregroundStyle(.red)
             }
-            Text("API for other apps: AppLink get PresenceBar")
-                .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button(model.paused ? "Resume" : "Pause") { model.setPaused(!model.paused) }
                 Button("Check now") { model.runNow() }.disabled(model.busy)
