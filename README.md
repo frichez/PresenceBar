@@ -55,7 +55,9 @@ slept or PresenceBar may be paused.
 
 With `{"events": 20}` as arguments, the answer also has `events`: the latest changes, newest first,
 `{"time", "who", "event", "last_seen"}`, where `who` is a person or `house` and `event` is `home` or `away`.
-PresenceBar has no actions: it reports, it controls nothing.
+PresenceBar has no actions: it reports, it controls nothing. At each check where someone came home or left, it
+sends the AppLink event `change` `{"who", "event": "home"/"away", "time", "previous_seconds"}` for whoever listens
+(AlexaBridge says "Bienvenue …" / "Au revoir …"; without a listener, nothing happens).
 
 ## Files
 

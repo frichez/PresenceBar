@@ -111,7 +111,8 @@ final class PresenceModel: ObservableObject {
         lastRun = Date()
         Task {
             do {
-                _ = try await Detector.runOnce()
+                let outcome = try await Detector.runOnce()
+                for c in outcome.changes { AppLink.send(event: "change", c) }  // AppLink (PresenceAPI.swift)
                 lastError = nil
             } catch {
                 lastError = String(describing: error)

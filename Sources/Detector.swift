@@ -74,6 +74,9 @@ struct Detector {
         let state: String
         let changed: Bool
         let summary: String
+        /// Each person who came home or left at this check: who, event ("home"/"away"), time, and how long the
+        /// state before lasted (seconds). Sent to the other apps as the AppLink "change" event.
+        var changes: [[String: Any]] = []
     }
 
     static func runOnce() async throws -> Outcome {
@@ -83,6 +86,7 @@ struct Detector {
         let check = await phoneCheck(now: now)
 
         var events: [[String]] = []
+        var changes: [[String: Any]] = []
         let wasHouse = s.state
         if check.ok {
             let before = Dictionary((s.people ?? []).map { ($0.who, $0) }, uniquingKeysWith: { a, _ in a })
@@ -94,6 +98,8 @@ struct Detector {
                     if old.home != home {
                         people.append(Person(who: p.who, home: home, since: nowInt, lastSeen: seen))
                         events.append([p.who, home ? "home" : "away", seen.map(stamp) ?? "-"])
+                        changes.append(["who": p.who, "event": home ? "home" : "away", "time": nowInt,
+                                        "previous_seconds": nowInt - old.since])
                     } else {
                         people.append(Person(who: old.who, home: home, since: old.since, lastSeen: seen))
                     }
@@ -123,7 +129,7 @@ struct Detector {
                                        check.ok ? (homeList.isEmpty ? "none" : homeList.joined(separator: "+")) : "?",
                                        check.new.isEmpty ? "-" : check.new.joined(separator: " ")])
         let who = check.ok ? (homeList.isEmpty ? "no family phone" : homeList.joined(separator: ", ")) : "router not readable"
-        return Outcome(state: s.state, changed: changed, summary: "\(s.state) | \(who)")
+        return Outcome(state: s.state, changed: changed, summary: "\(s.state) | \(who)", changes: changes)
     }
 
     // MARK: Phones on the TP-Link Archer (read-only, via RouterClient)

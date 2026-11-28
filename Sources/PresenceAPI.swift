@@ -6,6 +6,9 @@ import Foundation
 ///   get PresenceBar                  the last check: presence-state.json plus "paused"
 ///   get PresenceBar {"events": 20}   the same plus the latest 20 changes, newest first
 ///
+///   event change                     {"who", "event": "home"/"away", "time", "previous_seconds"}
+///                                    for each person who came home or left, at the check that saw it
+///
 /// The data is only as fresh as the last check: compare "checked_at" with the current time.
 extension PresenceModel {
     func startAppLink() {
