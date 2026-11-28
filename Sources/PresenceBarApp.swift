@@ -65,14 +65,12 @@ final class PresenceModel: ObservableObject {
     @Published var busy = false
     @Published var lastError: String?
 
-    let server = PresenceServer()
     private var timer: Timer?
     private var lastRun: Date?
     private var wakeObserver: NSObjectProtocol?
 
     init(startServer: Bool = true) {
-        if startServer { server.start() }
-        AlexaLink.onCommand { [weak self] _ in self?.whoIsHome() }  // via AlexaBridge, if it runs
+        if startServer { startAppLink() }  // the API for the other apps (PresenceAPI.swift)
         refresh()
         // A 60 s tick rather than a 600 s timer: after the Mac sleeps, the
         // next check then comes within a minute of waking.
@@ -333,9 +331,8 @@ struct PresencePanel: View {
             if let err = model.lastError {
                 Text("Last check failed: \(err)").font(.caption).foregroundStyle(.red)
             }
-            Text(model.server.error ?? "API for other apps: \(PresenceServer.url)")
-                .font(.caption).foregroundStyle(model.server.error == nil ? Color.secondary : Color.red)
-                .textSelection(.enabled)
+            Text("API for other apps: AppLink get PresenceBar")
+                .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button(model.paused ? "Resume" : "Pause") { model.setPaused(!model.paused) }
                 Button("Check now") { model.runNow() }.disabled(model.busy)

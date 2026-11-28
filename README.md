@@ -2,8 +2,8 @@
 
 A small macOS menu bar app that tells who is home, from the family phones
 connected to a TP-Link Archer Wi-Fi router. It only reports presence; it
-controls nothing. Other apps on the same Mac can read the result through a
-local HTTP API.
+controls nothing. Other apps on the same Mac can read the result through
+AppLink, a small API over distributed notifications.
 
 ## How it works
 
@@ -21,22 +21,25 @@ phone-like devices that are not in the configuration yet.
 
 ## API
 
-PresenceBar listens on `127.0.0.1:8787` only, so nothing outside the Mac can
-reach it.
+Other apps on this Mac read PresenceBar through AppLink (`Sources/AppLink.swift`): distributed notifications,
+no port and no server. It replaced the earlier HTTP service on `127.0.0.1:8787`. The protocol and the other
+apps' APIs are described in AlexaBridge's README (`~/Projects/AlexaBridge`).
 
 ```bash
-curl http://127.0.0.1:8787/presence
-curl "http://127.0.0.1:8787/events?limit=5"
+A=~/Projects/AlexaBridge/build/AlexaBridge.app/Contents/MacOS/AlexaBridge
+$A get PresenceBar
 ```
 
-`/presence`:
+`get PresenceBar` answers the last check (presence-state.json) plus `paused`:
 
 ```json
 {
+  "api": 1,
   "state": "home",
   "since": 1795710360,
   "checked_at": 1795765044,
   "router_ok": true,
+  "paused": false,
   "home": ["Alice"],
   "people": [
     {"who": "Alice", "home": true,  "since": 1795710360, "last_seen": 1795765044},
@@ -50,9 +53,9 @@ says why. Times are Unix timestamps in seconds. The data is only as fresh as the
 check: compare `checked_at` with the current time, since the Mac may have
 slept or PresenceBar may be paused.
 
-`/events` returns the latest changes, newest first:
-`{"time", "who", "event", "last_seen"}`, where `who` is a person or `house`
-and `event` is `home` or `away`.
+With `{"events": 20}` as arguments, the answer also has `events`: the latest changes, newest first,
+`{"time", "who", "event", "last_seen"}`, where `who` is a person or `house` and `event` is `home` or `away`.
+PresenceBar has no actions: it reports, it controls nothing.
 
 ## Files
 
@@ -61,7 +64,7 @@ gitignored, so it never leaves the Mac:
 
 | File | Content |
 |---|---|
-| `presence-state.json` | current state (what `/presence` returns) |
+| `presence-state.json` | current state (what `get PresenceBar` returns) |
 | `presence-events.csv` | one row per change |
 | `presence-log.csv` | one row per check |
 | `presence-phones-seen.json` | last time each device was seen |
@@ -126,7 +129,5 @@ When the menu bar icon is hidden (behind the notch on the laptop screen), open P
 
 ## Alexa (optional)
 
-When AlexaBridge (`~/Projects/AlexaBridge`) runs, "Alexa, qui est à la maison" is answered from the last check.
-It is read-only and never starts a check (`Sources/Voice.swift`, `Sources/AlexaLink.swift`).
-An optional `"spoken"` per phone in `phones.json` is the name Alexa says instead of `"who"`.
-Without AlexaBridge, nothing changes.
+When AlexaBridge (`~/Projects/AlexaBridge`) runs, "Alexa, qui est à la maison" is answered from `get PresenceBar`.
+All the voice handling is in AlexaBridge; PresenceBar knows nothing about it.
